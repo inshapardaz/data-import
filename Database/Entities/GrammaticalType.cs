@@ -6,10 +6,11 @@ namespace Inshapardaz.DataImport.Database.Entities
     [Flags]
     public enum GrammaticalType : long
     {
-       [Description("نامعلوم")]
+        [Description("")]
         None = 0x0000000000000000,
         [Description("مذکر")]
         Male = 0x0000000000000001,
+        [Description("مؤنث")]
         Female = 0x0000000000000010, 
         [Description("واحد")]
         Singular = 0x0000000000000100, 
@@ -46,7 +47,7 @@ namespace Inshapardaz.DataImport.Database.Entities
         [Description("اسم معرفہ")]
         IsmMuarfa = 0x0000000000210000, 
         [Description("اسم علم")]
-        IsmAlam = 0x0000000001210000, 
+        IsmAlam = 0x0000000001210000,
         [Description("خطاب")]
         Khitaab = 0x0000000011210000,
         [Description("لقب")]
@@ -69,6 +70,7 @@ namespace Inshapardaz.DataImport.Database.Entities
         Mutakallam = 0x0000000031310000, 
         [Description("ضمیر شخصی مخاطب")]
         Mukhatib = 0x0000000041310000, 
+        [Description("ضمیر اشارہ")]
         ZameerIshara = 0x0000000002310000, 
         [Description("ضمیر اشارہ قریب")]
         ZameerIsharaKareeb = 0x0000000012310000,
@@ -89,21 +91,21 @@ namespace Inshapardaz.DataImport.Database.Entities
         [Description("اسم موصول")]
         IsmMosool = 0x0000000000510000,
         [Description("اسم مجرد")]
-        IsmMujarrad = 0x0000000000310000, 
-        [Description("اسم کیفیت")]
-        IsmKaifiat = 0x0000000000410000, 
+        IsmMujarrad = 0x0000000000310000,
         [Description("اسم حاصل مصدر")]
-        IsmHasilMasdar = 0x0000000000510000, 
+        IsmHasilMasdar = 0x0000000000510000,
+        [Description("اسم کیفیت")]
+        IsmKaifiat = 0x0000000000610000,
         [Description("اسم جامد")]
-        IsmJamid = 0x0000000000610000, 
+        IsmJamid = 0x0000000000710000,
         [Description("اسم مادہ")]
-        IsmMaada = 0x0000000000710000, 
+        IsmMaada = 0x0000000000810000,
         [Description("اسم عدد")]
-        IsmAddad = 0x0000000000810000, 
+        IsmAddad = 0x0000000000910000,
         [Description("اسم معاوضہ")]
-        IsmMuawqza = 0x0000000000910000,
+        IsmMuawqza = 0x0000000000A10000,
         [Description("اسم تصغیر")]
-        IsmTashgeer = 0x0000000000A10000,
+        IsmTashgeer = 0x0000000000B10000,
         [Description("صفت ذاتی")]
         SiftZati = 0x0000000000120000,
         [Description("صفت نسبتی")]

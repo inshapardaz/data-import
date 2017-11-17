@@ -4,12 +4,14 @@ namespace Inshapardaz.DataImport.Database.Entities
 {
     public enum RelationType
     {
+        [Description("")]
+        None = 0,
         [Description("مترادف")]
         Synonym,
         [Description("متضاد")]
         Acronym,
         [Description("مرکب")]
-        Compund,
+        Compound,
         [Description("تغیرات")]
         Variation,
         [Description("واحد")]
@@ -45,7 +47,6 @@ namespace Inshapardaz.DataImport.Database.Entities
         [Description("تقابلی")]
         Takabuli,
         [Description("استعمال")]
-        Usage,
-        Unknown
+        Usage
     }
 }
