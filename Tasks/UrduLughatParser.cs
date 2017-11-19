@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Text;
 using System.Xml;
 using HtmlAgilityPack;
 using Inshapardaz.DataImport.Database;
@@ -12,7 +10,6 @@ using Inshapardaz.DataImport.Database.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
-using Remotion.Linq.Parsing.Structure.IntermediateModel;
 
 namespace Inshapardaz.DataImport.Tasks
 {
@@ -107,8 +104,8 @@ namespace Inshapardaz.DataImport.Tasks
             dictionary = database.Dictionary.Single(d => d.Name == dictionary.Name);
             foreach (var relation in relations)
             {
-                var sourceWord = dictionary.Word.FirstOrDefault(w => w.Title == relation.SourceWord);
-                var relatedWord = dictionary.Word.FirstOrDefault(w => w.Title == relation.RelatedWord);
+                var sourceWord = dictionary.Word.FirstOrDefault(w => w.DictionaryId == dictionary.Id && w.Title == relation.SourceWord);
+                var relatedWord = dictionary.Word.FirstOrDefault(w => w.DictionaryId == dictionary.Id && w.Title == relation.RelatedWord);
 
                 if (sourceWord != null && relatedWord != null)
                 {
@@ -121,7 +118,6 @@ namespace Inshapardaz.DataImport.Tasks
 
         public void ParseFile(string filePath, Dictionary dictionary)
         {
-            XmlReaderSettings settings = new XmlReaderSettings {DtdProcessing = DtdProcessing.Ignore};
             var doc = new HtmlDocument();
 
             try
@@ -133,10 +129,9 @@ namespace Inshapardaz.DataImport.Tasks
                 Console.WriteLine($"Error in  {filePath} , {ex.Message}");
             }
 
-
             var title = doc.DocumentNode.SelectSingleNode("//header/div/div/div/div/h2")?.InnerText.Trim();
             var alternameTitle = doc.DocumentNode.SelectSingleNode("//header/div/div/div/div[2]/span")?.InnerText;
-            var pronounciation = doc.DocumentNode.SelectSingleNode("//header/div/div/div[2]/div")?.InnerText;
+            var pronounciation = doc.DocumentNode.SelectSingleNode("//header/div/div/div[2]")?.InnerText;
             var language = doc.DocumentNode.SelectSingleNode("//header/div/div/div[3]/div/span")?.InnerText;
 
             var detailsNode = doc.DocumentNode.SelectSingleNode("//div[@class='container details']");
@@ -159,7 +154,7 @@ namespace Inshapardaz.DataImport.Tasks
                 Id = WordIdFromfileName(Path.GetFileName(filePath)),
                 Title = title,
                 TitleWithMovements = alternameTitle.TrimBrackets(),
-                Description = WebUtility.HtmlDecode(description),
+                Description = description.HtmlDecode(),
                 Pronunciation = pronounciation.TrimBrackets(),
                 Language = ParseLanguage(language)
             };
@@ -215,10 +210,10 @@ namespace Inshapardaz.DataImport.Tasks
                 }
             }
             var synonymsNode = detailsNode.Descendants("div").SingleOrDefault(div => div.Id == "synonyms");
-            ParseRelation(w, synonymsNode, RelationType.Synonym);
+            ParseRelation(dictionary, w, synonymsNode, RelationType.Synonym);
 
             var compoundsNode = detailsNode.Descendants("div").SingleOrDefault(div => div.Id == "compounds");
-            ParseRelation(w, compoundsNode, RelationType.Compund);
+            ParseRelation(dictionary, w, compoundsNode, RelationType.Compound);
 
             var usagesNode = detailsNode.Descendants("div").SingleOrDefault(div => div.Id == "usages");
             if (usagesNode != null)
@@ -245,7 +240,7 @@ namespace Inshapardaz.DataImport.Tasks
                             var index = nodeInnerText.IndexOf('-');
                             if (index != -1)
                                 nodeInnerText = nodeInnerText.Substring(index + 1);
-                            w2 = new Word{ Title = nodeInnerText.Trim()};
+                            w2 = new Word{ Title = nodeInnerText.Trim().RemoveMovements() };
                         }
                         else
                         {
@@ -274,7 +269,7 @@ namespace Inshapardaz.DataImport.Tasks
                     if (w2 != null)
                     {
                         dictionary.Word.Add(w2);
-                        w.WordRelationRelatedWord.Add(new WordRelation
+                        w.WordRelationSourceWord.Add(new WordRelation
                         {
                             RelationType = RelationType.Usage,
                             RelatedWord = w2
@@ -311,18 +306,20 @@ namespace Inshapardaz.DataImport.Tasks
                 var index2 = detail.IndexOf("[");
                 if (index2 != -1)
                 {
-                    var extraTitle = detail.Substring(0, index2).Trim();
+                    var extraTitle = detail.Substring(0, index2).Trim().RemoveMovements();
                     var extraPronounciation = detail.Substring(index2).TrimBrackets();
-                    WordRelation relation = new WordRelation
-                    {
-                        RelatedWord = new Word {Title = extraTitle},
-                        RelationType = ParseRelationType(extraPropType)
-                    };
 
                     Word w1 = new Word
                     {
                         Title = extraTitle,
                         Pronunciation = extraPronounciation
+                    };
+
+                    WordRelation relation = new WordRelation
+                    {
+                        SourceWord = w1,
+                        RelatedWord = new Word {Title = extraTitle},
+                        RelationType = ParseRelationType(extraPropType)
                     };
 
                     d.Word.Add(w1);
@@ -332,16 +329,22 @@ namespace Inshapardaz.DataImport.Tasks
             }
         }
 
-        private void ParseRelation(Word word, HtmlNode synonymsNode, RelationType relationType)
+        private void ParseRelation(Dictionary d, Word word, HtmlNode synonymsNode, RelationType relationType)
         {
             if (synonymsNode == null) return;   
-            var linkNode = synonymsNode.Descendants("a");
-            foreach (var node in linkNode)
+            var listNode = synonymsNode.Descendants("li");
+            foreach (var li in listNode)
             {
-                var title = node.SelectSingleNode("h5")?.InnerText;
+                var node = li.SelectSingleNode("a")??li;
+                var title = node.SelectSingleNode("h5")?.InnerText?.RemoveMovements();
                 var titleWithMovement = node.SelectSingleNode("meta")?.Attributes["content"]?.Value;
                 var language = ParseLanguage(node.SelectSingleNode("div")?.InnerText);
-                var id = WordIdFromfileName(node.Attributes["href"].Value);
+                var id = WordIdFromfileName(node.Attributes["href"]?.Value);
+
+                if (id <= 0)
+                {
+                    d.Word.Add(new Word{ Title = title});
+                }
 
                 var relation = new WordRelation
                 {
@@ -565,7 +568,7 @@ namespace Inshapardaz.DataImport.Tasks
         {
             if (string.IsNullOrWhiteSpace(value))
             {
-                return RelationType.Unknown;
+                return RelationType.None;
             }
 
             var val = value.Trim().TrimBrackets();
@@ -604,6 +607,7 @@ namespace Inshapardaz.DataImport.Tasks
         }
         private int WordIdFromfileName(string fileName)
         {
+            if (string.IsNullOrWhiteSpace(fileName)) return 0;
             var val = fileName.Split('-').First();
             if (int.TryParse(val, out var parsedVal))
             {

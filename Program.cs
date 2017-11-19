@@ -27,11 +27,15 @@ namespace Inshapardaz.DataImport
                 Mapper.AssertConfigurationIsValid();
 
                 //new OudDownloader().RemoveEmpty();
-                //new OudParser().ParseAndSaveToJson();
+                //new OudParser(Configuration)
+                    //.ParseAndSaveToJson();
+                    //.ImportDataToDatabase();
                 //new JsonDataImport(Configuration).ImportData(@"C:\Users\muhammad.farooq\Downloads\Words");
-                new UrduLughatParser(Configuration)
-                    .ParseDictioanryToJson()
-                    .ImportDataToDatabase();
+
+                //new UrduLughatParser(Configuration)
+                    //.ParseDictioanryToJson()
+                    //.ImportDataToDatabase();
+                    
             }
             catch (Exception ex)
             {

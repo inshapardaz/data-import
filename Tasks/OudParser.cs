@@ -1,13 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Reflection.Metadata;
 using System.Xml;
 using HtmlAgilityPack;
 using Inshapardaz.DataImport.Database;
 using Inshapardaz.DataImport.Database.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using File = System.IO.File;
 
@@ -15,8 +16,17 @@ namespace Inshapardaz.DataImport.Tasks
 {
     public class OudParser
     {
+        private readonly IConfigurationRoot _configuration;
 
-        public void ParseAndSaveToJson()
+        List<string> ErrorParse = new List<string>();
+        List<string> Errors = new List<string>();
+
+        public OudParser(IConfigurationRoot configuration)
+        {
+            _configuration = configuration;
+        }
+
+        public OudParser ParseAndSaveToJson()
         {
             var sourcePath = @"C:\code\urdu data\udb.org";
             var files = Directory.GetFiles(sourcePath, "*.html");
@@ -32,20 +42,18 @@ namespace Inshapardaz.DataImport.Tasks
                 try
                 {
                     Console.WriteLine($"Processing {i} of {files.Length} - {Path.GetFileName(file)}");
-                    //ParseFile(file, dictionary);
-                    ParseFile(@"C:\code\urdu data\udb.org\56840.html", dictionary);
-                    break;
+                    ParseFile(file, dictionary);
                 }
                 catch (ArgumentOutOfRangeException ex)
                 {
-                    //if (!Errors.Contains(ex.ParamName))
-                    //{
-                    //    Errors.Add(ex.ParamName);
-                    //}
+                    if (!Errors.Contains(ex.ParamName))
+                    {
+                        Errors.Add(ex.ParamName);
+                    }
                 }
                 catch (Exception ex)
                 {
-                    //ErrorParse.Add(file);
+                    ErrorParse.Add(file);
                 }
                 finally
                 {
@@ -61,7 +69,7 @@ namespace Inshapardaz.DataImport.Tasks
                 {
                     if (relation.RelatedWord != null && relation.RelatedWord.Id != 0)
                     {
-                        relations.Add(new UrduLughatParser.Relation { RelationType = relation.RelationType, SourceWord = word.Title, RelatedWord = relation.RelatedWord.Title });
+                        relations.Add(new UrduLughatParser.Relation {RelationType = relation.RelationType, SourceWord = word.Title, RelatedWord = relation.RelatedWord.Title});
                     }
                 }
 
@@ -74,37 +82,44 @@ namespace Inshapardaz.DataImport.Tasks
                 word.Id = 0;
             }
 
+            File.WriteAllText(@"C:\code\urdu data\udb.org\output\errors.txt", string.Join(Environment.NewLine, Errors));
+            File.WriteAllText(@"C:\code\urdu data\udb.org\output\errorParse.txt", string.Join(Environment.NewLine, ErrorParse));
+
             File.WriteAllText(@"C:\code\urdu data\udb.org\output\words.json", JsonConvert.SerializeObject(dictionary));
             File.WriteAllText(@"C:\code\urdu data\udb.org\output\relations.json", JsonConvert.SerializeObject(relations));
+
+            return this;
         }
 
-        /*public void Execute()
+        public void ImportDataToDatabase()
         {
-            var connectionString = "data source=.;initial catalog=Inshapardaz;integrated security=True;MultipleActiveResultSets=True;App=EntityFramework";
+            var dictionary = JsonConvert.DeserializeObject<Dictionary>(System.IO.File.ReadAllText(@"C:\code\urdu data\udb.org\output\words.json"));
+            //var relations = JsonConvert.DeserializeObject<List<Relation>>(System.IO.File.ReadAllText(@"C:\code\urdu data\urdulughat.info\relations.json"));
+
             var optionsBuilder = new DbContextOptionsBuilder<DatabaseContext>();
-            optionsBuilder.UseSqlServer(connectionString);
+            optionsBuilder.UseSqlServer(_configuration.GetConnectionString("InshapardazDatabase"));
 
-            var db = new DatabaseContext(optionsBuilder.Options);
-            var files = new DirectoryInfo(@"C:\data\").GetFiles("*.html");
-            var dictionary = new Dictionary {Name = DateTime.Now.ToString("u"), IsPublic = true, Language = Languages.Urdu };
-            db.Dictionary.Add(dictionary);
-            int i = 0;
-            foreach (var file in files)
-            {
-                ProcessFile(dictionary, file.FullName);
+            var database = new DatabaseContext(optionsBuilder.Options);
+            database.Dictionary.Add(dictionary);
+            database.SaveChanges();
 
-                if (i % 100 == 0)
-                {
-                    db.SaveChanges();
-                }
-            }
+            //dictionary = database.Dictionary.Single(d => d.Name == dictionary.Name);
+            //foreach (var relation in relations)
+            //{
+            //    var sourceWord = dictionary.Word.FirstOrDefault(w => w.DictionaryId == dictionary.Id && w.Title == relation.SourceWord);
+            //    var relatedWord = dictionary.Word.FirstOrDefault(w => w.DictionaryId == dictionary.Id && w.Title == relation.RelatedWord);
 
-            Console.ReadKey();
-        }*/
+            //    if (sourceWord != null && relatedWord != null)
+            //    {
+            //        database.WordRelation.Add(new WordRelation { SourceWord = sourceWord, RelatedWord = relatedWord, RelationType = relation.RelationType });
+            //    }
+            //}
+
+            database.SaveChanges();
+        }
 
         private void ParseFile(string filePath, Dictionary dictionary)
         {
-            XmlReaderSettings settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore };
             var doc = new HtmlDocument();
 
             try
@@ -116,18 +131,25 @@ namespace Inshapardaz.DataImport.Tasks
                 Console.WriteLine($"Error in  {filePath} , {ex.Message}");
             }
 
-            Console.WriteLine($"Processing {filePath}");
-
             var container = doc.DocumentNode.SelectSingleNode("//body/div[@class='container']");
 
             var titleNode = container.SelectSingleNode("div/h1");
+            var pronouciationNode = container.SelectSingleNode("div/h1/small");
+            var grammaerNode = container.SelectSingleNode("div/h1/small/span");
 
+            var titleAlternate = GetTitle(titleNode)?.Replace("-", string.Empty);
+            var title = titleAlternate.RemoveMovements();
             var word = new Word
             {
-                Title = GetNodeText(titleNode),
-                Description = filePath
+                Title = title,
+                TitleWithMovements = titleAlternate,
+                Description = filePath,
+                Pronunciation = GetPronounciation(pronouciationNode),
+                Attributes = GetGrammarTypes(grammaerNode.InnerText)
             };
 
+            if (string.IsNullOrWhiteSpace(word.Title)) return;
+            
             var meaningNode = container.SelectSingleNode("div[2]");
 
             Meaning mean = null;
@@ -140,7 +162,7 @@ namespace Inshapardaz.DataImport.Tasks
                         word.Meaning.Add(mean);
                     }
 
-                    mean = new Meaning{Value = StripNumber(node.InnerText.Trim())};
+                    mean = new Meaning {Value = StripNumber(node.InnerText.Trim())};
                 }
                 else if (node.Attributes["class"]?.Value == "col-lg-12 col-md-12 col-sm-12 col-xs-12 text-justify set-width")
                 {
@@ -149,44 +171,18 @@ namespace Inshapardaz.DataImport.Tasks
                         mean.Example += Environment.NewLine + node.InnerText.Trim();
                     }
                 }
-            }
-            
-            Console.WriteLine(word);
-            //var pronounceNode = titleNode.SelectSingleNode("small");
-            //word.Pronunciation = GetNodeText(pronounceNode);
-
-            /*var attribNode = doc.SelectSingleNode("/div/div[1]/h1/small/span");
-            var attibute = GetType(GetNodeText(attribNode));
-
-            var meaningNodes = doc.SelectSingleNode("/div/div[2]");
-            word.Attributes = attibute;
-            word.Meaning = new List<Meaning>();
-            Meaning meaning = null;
-            foreach (XmlNode meaningNode in meaningNodes.ChildNodes)
-            {
-                if (meaningNode.Name == "div" && meaningNode.FirstChild.Name != "p" &&
-                    meaningNode.FirstChild.FirstChild.HasChildNodes &&
-                    meaningNode.FirstChild.FirstChild.Attributes["class"].Value == "gold_color")
+                else if (node.Attributes["class"]?.Value == "col-lg-12 col-md-12 col-sm-12 col-xs-12 text-center")
                 {
-                    if (meaning != null)
-                    {
-                        word.Meaning.Add(meaning);
-                    }
-                    meaning = new Meaning
-                    {
-                        Value = meaningNode.FirstChild.FirstChild.InnerText
-                    };
-                }
-                if (meaning != null)
-                {
-                    meaning.Example += meaningNode.InnerText + Environment.NewLine;
+                    //Word misc informaion here
+                    word.Description = node.InnerText.HtmlDecode().Trim();
                 }
             }
-
-            if (word != null)
+            if (mean != null)
             {
-                dictionary.Word.Add(word);
-            }*/
+                word.Meaning.Add(mean);
+            }
+
+            dictionary.Word.Add(word);
         }
 
         private string StripNumber(string input)
@@ -199,158 +195,153 @@ namespace Inshapardaz.DataImport.Tasks
             return input;
         }
 
-        private string GetNodeText(HtmlNode node)
+        private string GetTitle(HtmlNode node)
         {
-            foreach (var child in node.ChildNodes)
+            var extra = node?.SelectSingleNode("small")?.InnerText;
+            if (extra != null)
+                return node?.InnerText.Replace(extra, string.Empty).Trim();
+            return node.InnerText.Trim();
+        }
+
+        private string GetPronounciation(HtmlNode node)
+        {
+            var extra = node.SelectSingleNode("span")?.InnerText;
+            if (extra != null)
+                return node.InnerText.Replace(extra, string.Empty).HtmlDecode().Trim().TrimBrackets();
+            return node.InnerText.HtmlDecode().Trim().TrimBrackets();
+        }
+
+
+        public GrammaticalType GetGrammarTypes(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return GrammaticalType.None;
+
+            var val = value.HtmlDecode().Trim().TrimBrackets().Trim();
+
+            if (string.IsNullOrWhiteSpace(val)) return GrammaticalType.None;
+
+            var retval = GrammaticalType.None;
+            string previous = string.Empty;
+            foreach (var v in val.Split(' '))
             {
-                if (child.NodeType == HtmlNodeType.Text)
+                try
                 {
-                    return child.InnerText.Trim();
+                    if (!string.IsNullOrWhiteSpace(previous))
+                        retval |= GetGrammarType($"{previous.Trim()} {v.Trim()}");
+                    else
+                        retval |= GetGrammarType(v.Trim());
+
+                    previous = string.Empty;
+                }
+                catch (ArgumentOutOfRangeException ex)
+                {
+                    previous = v;
                 }
             }
 
-            return string.Empty;
+            return retval;
         }
 
-        public GrammaticalType GetType(string value)
+        public GrammaticalType GetGrammarType(string value)
         {
-            var grammaticalType = GrammaticalType.None;
-
-            if (value == "ج")
+            switch (value)
             {
-                grammaticalType = grammaticalType | GrammaticalType.Plural;
+                case "ج":
+                    return GrammaticalType.Plural;
+                case "جج":
+                    return GrammaticalType.JamaUlJama;
+                case "مج":
+                    return GrammaticalType.Majhool;
+                case "مع":
+                    return GrammaticalType.Maroof;
+                case "امذ":
+                    return GrammaticalType.Male | GrammaticalType.Ism;
+                case "امث":
+                    return GrammaticalType.Female | GrammaticalType.Ism;
+                case "صف":
+                    return GrammaticalType.Sift;
+                case "مذ":
+                    return GrammaticalType.Male;
+                case "مث":
+                    return GrammaticalType.Female;
+                case "م ف":
+                    return GrammaticalType.MutaliqFeal;
+                case "ف ل":
+                    return GrammaticalType.FealLazim;
+                case "ف م":
+                    return GrammaticalType.FealMutaddi;
+                case "ف مر":
+                    return GrammaticalType.FealMurakkab;
+                case "محاورہ":
+                    return GrammaticalType.Proverb;
+                case "حرف":
+                    return GrammaticalType.Harf;
+                case "کہاوت":
+                case "مقولہ":
+                    return GrammaticalType.Saying;
+                case "دیگر":
+                    return GrammaticalType.None;
+                case "نیز":
+                    return GrammaticalType.None;
+                case "فجائیہ":
+                    return GrammaticalType.HarfFijaia;
+                case "سابقہ":
+                    return GrammaticalType.PreFix;
+                case "لاحقہ":
+                    return GrammaticalType.PostFix;
+                default:
+                    throw new ArgumentOutOfRangeException(value);
             }
-            else if (value == "جج")
-            {
-                grammaticalType = grammaticalType | GrammaticalType.JamaUlJama;
-            }
-            else if (value == "مع")
-            {
-                grammaticalType = grammaticalType | GrammaticalType.Majhool;
-            }
-            else if (value == "امذ")
-            {
-                grammaticalType = grammaticalType | GrammaticalType.Male | GrammaticalType.Ism;
-            }
-            else if (value == "امث")
-            {
-                grammaticalType = grammaticalType | GrammaticalType.Female | GrammaticalType.Ism;
-            }
-            else if (value == "صف")
-            {
-                grammaticalType = grammaticalType | GrammaticalType.Sift;
-            }
-            else if (value == "مذ")
-            {
-                grammaticalType = grammaticalType | GrammaticalType.Male;
-            }
-            else if (value == "مث")
-            {
-                grammaticalType = grammaticalType | GrammaticalType.Female;
-            }
-            else if (value == "م ف")
-            {
-                grammaticalType = grammaticalType | GrammaticalType.MutaliqFeal;
-            }
-            else if (value == "ف ل")
-            {
-                grammaticalType = grammaticalType | GrammaticalType.FealLazim;
-            }
-            else if (value == "ف م")
-            {
-                grammaticalType = grammaticalType | GrammaticalType.FealMutaddi;
-            }
-            else if (value == "ف مر")
-            {
-                grammaticalType = grammaticalType | GrammaticalType.FealMurakkab;
-            }
-
-            return grammaticalType;
         }
 
         public Languages GetLanguage(string value)
         {
-            if (value == "ا")
+            var val = value.HtmlDecode().Trim().RemoveBrackets().Trim();
+            switch (val)
             {
-                return Languages.Urdu;
+                case "ا":
+                    return Languages.Urdu;
+                case "انگ":
+                    return Languages.English;
+                case "اوستا":
+                    return Languages.Avestan;
+                case "بنگ":
+                    return Languages.Bangali;
+                case "پ":
+                    return Languages.Prakrit;
+                case "پا":
+                    return Languages.Pali;
+                case "پر":
+                    return Languages.Portugeese;
+                case "پن":
+                    return Languages.Punjabi;
+                case "تر":
+                    return Languages.Turkish;
+                case "س":
+                    return Languages.Sansikrat;
+                case "سر":
+                    return Languages.Syriac;
+                case "ع":
+                    return Languages.Arabic;
+                case "عبر":
+                    return Languages.Hebrew;
+                case "ف":
+                    return Languages.Persian;
+                case "فر":
+                    return Languages.French;
+                case "گج":
+                    return Languages.Gujrati;
+                case "لاط":
+                    return Languages.Latin;
+                case "مر":
+                    return Languages.Marhati;
+                case "ہ":
+                    return Languages.Hindi;
+                case "یو":
+                    return Languages.Greek;
+                default:
+                    throw new ArgumentOutOfRangeException(val);
             }
-            if (value == "انگ")
-            {
-                return Languages.English;
-            }
-            if (value == "اوستا")
-            {
-                return Languages.Avestan;
-            }
-            if (value == "بنگ")
-            {
-                return Languages.Bangali;
-            }
-            if (value == "پ")
-            {
-                return Languages.Prakrit;
-            }
-            if (value == "پا")
-            {
-                return Languages.Pali;
-            }
-            if (value == "پر")
-            {
-                return Languages.Portugeese;
-            }
-            if (value == "پن")
-            {
-                return Languages.Punjabi;
-            }
-            if (value == "تر")
-            {
-                return Languages.Turkish;
-            }
-            if (value == "س")
-            {
-                return Languages.Sansikrat;
-            }
-            if (value == "سر")
-            {
-                return Languages.Syriac;
-            }
-            if (value == "ع")
-            {
-                return Languages.Arabic;
-            }
-            if (value == "عبر")
-            {
-                return Languages.Hebrew;
-            }
-            if (value == "ف")
-            {
-                return Languages.Persian;
-            }
-            if (value == "فر")
-            {
-                return Languages.French;
-            }
-            if (value == "گج")
-            {
-                return Languages.Gujrati;
-            }
-            if (value == "لاط")
-            {
-                return Languages.Latin;
-            }
-            if (value == "مر")
-            {
-                return Languages.Marhati;
-            }
-            if (value == "ہ")
-            {
-                return Languages.Hindi;
-            }
-            if (value == "یو")
-            {
-                return Languages.Greek;
-            }
-            return Languages.Unknown;
         }
     }
 }
