@@ -27,8 +27,8 @@ namespace Inshapardaz.DataImport
                 Mapper.AssertConfigurationIsValid();
 
                 //new OudDownloader().RemoveEmpty();
-                //new OudParser(Configuration)
-                    //.ParseAndSaveToJson();
+                new OudParser(Configuration)
+                    .ParseAndSaveToJson();
                     //.ImportDataToDatabase();
                 //new JsonDataImport(Configuration).ImportData(@"C:\Users\muhammad.farooq\Downloads\Words");
 
@@ -42,6 +42,7 @@ namespace Inshapardaz.DataImport
                 Console.WriteLine("COMMAND FAILED");
                 Console.WriteLine(ex.Message);
                 Console.WriteLine(ex.StackTrace);
+                Console.ReadKey();
             }
         }
     }

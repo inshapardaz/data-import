@@ -138,7 +138,7 @@ namespace Inshapardaz.DataImport.Tasks
             var grammaerNode = container.SelectSingleNode("div/h1/small/span");
 
             var titleAlternate = GetTitle(titleNode)?.Replace("-", string.Empty);
-            var title = titleAlternate.RemoveMovements();
+            var title = titleAlternate.RemoveMovements().Sanitise();
             var word = new Word
             {
                 Title = title,
@@ -200,7 +200,7 @@ namespace Inshapardaz.DataImport.Tasks
             var extra = node?.SelectSingleNode("small")?.InnerText;
             if (extra != null)
                 return node?.InnerText.Replace(extra, string.Empty).Trim();
-            return node.InnerText.Trim();
+            return node.InnerText.HtmlDecode().Trim().TrimBrackets();
         }
 
         private string GetPronounciation(HtmlNode node)

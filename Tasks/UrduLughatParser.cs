@@ -91,8 +91,8 @@ namespace Inshapardaz.DataImport.Tasks
 
         public void ImportDataToDatabase()
         {
-            var dictionary = JsonConvert.DeserializeObject<Dictionary>(System.IO.File.ReadAllText(@"C:\code\urdu data\urdulughat.info\words.json"));
-            var relations = JsonConvert.DeserializeObject<List<Relation>>(System.IO.File.ReadAllText(@"C:\code\urdu data\urdulughat.info\relations.json"));
+            var dictionary = JsonConvert.DeserializeObject<Dictionary>(System.IO.File.ReadAllText(@"C:\code\inshapardaz\data\urdulughat.info\words.json"));
+            var relations = JsonConvert.DeserializeObject<List<Relation>>(System.IO.File.ReadAllText(@"C:\code\inshapardaz\data\urdulughat.info\relations.json"));
 
             var optionsBuilder = new DbContextOptionsBuilder<DatabaseContext>();
             optionsBuilder.UseSqlServer(_configuration.GetConnectionString("InshapardazDatabase"));

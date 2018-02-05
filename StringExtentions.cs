@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Inshapardaz.DataImport
 {
@@ -38,6 +39,34 @@ namespace Inshapardaz.DataImport
                 }
             }
             return result.ToString();
+        }
+
+        public static string Sanitise(this string input)
+        {
+            var charsToRemove = new []
+            {
+                "\t", "ِ", "َ", "ُ", "ّ", "ً", "ٍ",
+                "ْ", "۔", "-", ".", "ٓ", "(", ")",
+                "￿", "ؑ", "٘", "۱", "۲", "۵", "۳", "۴", "۶", "۷", "۸",
+                "۹", "۰", " ب ", " د ", " ہ ", " ء ", " ج ", " الف "
+            };
+            foreach (var c in charsToRemove)
+            {
+                input = input.Replace(c, string.Empty);
+            }
+
+            while (input.Contains("  "))
+            {
+                input = input.Replace("  ", " ");
+            }
+
+            input = Regex.Replace(input, " الف$", "");
+            input = Regex.Replace(input, " ب$", "");
+            input = Regex.Replace(input, " ج$", "");
+            input = Regex.Replace(input, " و$", "");
+            input = Regex.Replace(input, " د$", "");
+            input = Regex.Replace(input, " ہ$", "");
+            return input;
         }
     }
 }
