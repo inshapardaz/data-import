@@ -137,7 +137,7 @@ namespace Inshapardaz.DataImport.Tasks
             var pronouciationNode = container.SelectSingleNode("div/h1/small");
             var grammaerNode = container.SelectSingleNode("div/h1/small/span");
 
-            var titleAlternate = GetTitle(titleNode)?.Replace("-", string.Empty);
+            var titleAlternate = GetTitle(titleNode)?.Replace("-", string.Empty).Sanitise(false);
             var title = titleAlternate.RemoveMovements().Sanitise();
             var word = new Word
             {

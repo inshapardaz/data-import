@@ -41,12 +41,17 @@ namespace Inshapardaz.DataImport
             return result.ToString();
         }
 
-        public static string Sanitise(this string input)
+        public static string Sanitise(this string input, bool removeSymbols = false)
         {
-            var charsToRemove = new []
+            var charsToRemove = removeSymbols ? new []
             {
                 "\t", "ِ", "َ", "ُ", "ّ", "ً", "ٍ",
                 "ْ", "۔", "-", ".", "ٓ", "(", ")",
+                "￿", "ؑ", "٘", "۱", "۲", "۵", "۳", "۴", "۶", "۷", "۸",
+                "۹", "۰", " ب ", " د ", " ہ ", " ء ", " ج ", " الف "
+            } : new []
+            {
+                "\t", "۔", "-", ".", "ٓ", "(", ")",
                 "￿", "ؑ", "٘", "۱", "۲", "۵", "۳", "۴", "۶", "۷", "۸",
                 "۹", "۰", " ب ", " د ", " ہ ", " ء ", " ج ", " الف "
             };
