@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Xml;
 using HtmlAgilityPack;
 using Inshapardaz.DataImport.Database;
@@ -118,6 +119,28 @@ namespace Inshapardaz.DataImport.Tasks
             database.SaveChanges();
         }
 
+        public void ImportDataToCsv()
+        {
+            var dictionary = JsonConvert.DeserializeObject<Dictionary>(File.ReadAllText(@"C:\code\urdu data\udb.org\output\words.json"));
+
+            using (var fileStream = new FileStream(@"C:\code\urdu data\udb.org\output\words.csv", FileMode.Create))
+            using (var file = new StreamWriter(fileStream))
+            {
+                foreach (var word in dictionary.Word)
+                {
+                    StringBuilder sb = new StringBuilder();
+                    sb.Append($"{word.Title}");
+                    foreach (var meaning in word.Meaning)
+                    {
+                        sb.Append($"\t{meaning.Value.RemoveTabs().RemoveNewLines()}");
+                    }
+
+                    file.WriteLine(sb.ToString());
+                }
+            }
+
+        }
+
         private void ParseFile(string filePath, Dictionary dictionary)
         {
             var doc = new HtmlDocument();
@@ -162,7 +185,7 @@ namespace Inshapardaz.DataImport.Tasks
                         word.Meaning.Add(mean);
                     }
 
-                    mean = new Meaning {Value = StripNumber(node.InnerText.Trim())};
+                    mean = new Meaning {Value = StripNumber(node.InnerText.Trim()).RemoveTabs().ConsolidateMiltipleLines()};
                 }
                 else if (node.Attributes["class"]?.Value == "col-lg-12 col-md-12 col-sm-12 col-xs-12 text-justify set-width")
                 {
@@ -187,8 +210,8 @@ namespace Inshapardaz.DataImport.Tasks
 
         private string StripNumber(string input)
         {
-            var index = input.IndexOf("۔");
-            if (index != -1)
+            var index = input.IndexOf(".");
+            if (index != -1 && index < 3)
             {
                 return input.Substring(index);
             }
